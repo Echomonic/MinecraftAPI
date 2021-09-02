@@ -1,0 +1,6 @@
+name: MinecraftAPI
+version: ${project.version}
+main: dev.echo.minecraftapi.MinecraftAPI
+prefix: MinecraftAPI
+authors: [ Echos ]
+description: Just a simple api for maven, and normal java projects!
