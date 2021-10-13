@@ -19,6 +19,8 @@ import org.bukkit.*;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandMap;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.SimpleCommandMap;
+import org.bukkit.craftbukkit.v1_8_R3.CraftServer;
 import org.bukkit.craftbukkit.v1_8_R3.entity.CraftPlayer;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
@@ -108,7 +110,7 @@ public class MinecraftAPI {
          * @param colorize True if you want the text to be able to be colored other wise false.
          */
 
-        private static void sendTitle(Player player, String text, boolean colorize) {
+        public static void sendTitle(Player player, String text, boolean colorize) {
             try {
                 Object enumTitle = getNMSClass("PacketPlayOutTitle").getDeclaredClasses()[0].getField("TITLE").get(null);
                 if (colorize) {
@@ -274,7 +276,7 @@ public class MinecraftAPI {
          * @param colorize True if you want the text to be able to be colored other wise false.
          */
 
-        private static void sendActionbar(Player player, String text, boolean colorize) {
+        public static void sendActionbar(Player player, String text, boolean colorize) {
             try {
                 Object aBString = Objects.requireNonNull(getNMSClass("IChatBaseComponent")).getDeclaredClasses()[0].getMethod("a", String.class).invoke(null, "{\"text\":\"" + ChatColor.translateAlternateColorCodes('&', text) + "\"}");
 
@@ -300,7 +302,7 @@ public class MinecraftAPI {
          * @param packet The "packet" that is sent to the player, the most recommended one is reflection and caching the methods.
          *               Keeps the development clean and multi-version.
          */
-        private static void sendPacket(Player player, Object packet) {
+        public static void sendPacket(Player player, Object packet) {
             try {
                 Object handle = player.getClass().getMethod("getHandle").invoke(player);
                 Object playerConnection = handle.getClass().getField("playerConnection").get(handle);
@@ -317,7 +319,7 @@ public class MinecraftAPI {
          * @param packet The "packet" that is sent to the player, the most recommended one is reflection and caching the methods.
          *               Keeps the development clean and multi-version.
          */
-        private static void sendPacketNotFor(Player player, Object packet) {
+        public static void sendPacketNotFor(Player player, Object packet) {
             for(Player players : Bukkit.getOnlinePlayers()) {
                 if(!player.getUniqueId().toString().equalsIgnoreCase(players.getUniqueId().toString())) {
                     sendPacket(players,packet);
@@ -359,7 +361,6 @@ public class MinecraftAPI {
         }
 
         public static CommandMap getCommandMap(Server server) {
-
             try {
                 Field field = server.getClass().getDeclaredField("commandMap");
 
@@ -390,13 +391,7 @@ public class MinecraftAPI {
          * @implNote Doesn't require command section plugin.yml!
          */
         public static void registerCommand(String fallBack, Command command) {
-            try {
-
-                PacketAPI.getCommandMap(Bukkit.getServer()).register(fallBack, command);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-
+            ((CraftServer)Bukkit.getServer()).getCommandMap().register(command.getName(),fallBack,command);
         }
 
         /**
@@ -406,9 +401,9 @@ public class MinecraftAPI {
          */
         @SafeVarargs
         public static void registerCommands(String fallBack, Class<? extends Command>... commands) {
-            for(Class<? extends Command> c : commands){
+            for(Class<? extends Command> c : commands) {
                 try {
-                    Objects.requireNonNull(PacketAPI.getCommandMap(Bukkit.getServer())).register(fallBack,c.newInstance());
+                    ((CraftServer)Bukkit.getServer()).getCommandMap().register(fallBack, c.newInstance());
                 } catch (InstantiationException | IllegalAccessException e) {
                     e.printStackTrace();
                 }
@@ -516,19 +511,7 @@ public class MinecraftAPI {
                 }
             });
         }
-        @SneakyThrows
-        public static void registerAllCommandsInPackage(String f,String a){
-            final ClassLoader l = Main.instance.getClass().getClassLoader();
 
-            ClassPath c = ClassPath.from(l);
-
-            for(ClassPath.ClassInfo i : c.getTopLevelClasses(a)){
-                Class<? extends Command> t = (Class<? extends Command>) i.load();
-
-                    registerCommand(f,t.newInstance());
-
-            }
-        }
         /**
          * @param sender     The sender of the command that we are also checking.
          * @param permission The permission that we are checking.
@@ -566,10 +549,10 @@ public class MinecraftAPI {
         private final Inventory inventory;
 
         //How many slots there are going to be in the inventory.
-        private int slots;
+        private int sizeAsSlots;
         //What the title of the gui is going to be. (Supports Color codes!)
         private String title;
-
+        private Size slots;
         /**
          *
          * This also creates the gui.
@@ -579,7 +562,8 @@ public class MinecraftAPI {
          */
         public Gui(String title, Size slots){
             this.title = title;
-            this.slots = slots.getGuiSize();
+            this.sizeAsSlots = slots.getGuiSize();
+            this.slots = slots;
             inventory = Bukkit.createInventory(null,slots.getGuiSize(),ChatColor.translateAlternateColorCodes('&',title));
         }
 
@@ -616,11 +600,11 @@ public class MinecraftAPI {
          * Just sets the slots of the inventory.
          *
          *
-         * @param slots If there is some animation in the gui you can set the slots then open in again and etc.
+         * @param sizeAsSlots If there is some animation in the gui you can set the slots then open in again and etc.
          */
 
-        public void setSlots(int slots) {
-            this.slots = slots;
+        protected void setSlots(int sizeAsSlots) {
+            this.sizeAsSlots = sizeAsSlots;
         }
 
         /**
@@ -628,7 +612,7 @@ public class MinecraftAPI {
          * @param title just sets the title of the gui.
          */
 
-        public void setTitle(String title) {
+        protected void setTitle(String title) {
             this.title = title;
         }
 
@@ -650,7 +634,7 @@ public class MinecraftAPI {
          * @return slots
          */
         public int getSlots() {
-            return slots;
+            return sizeAsSlots;
         }
 
         /**
@@ -658,14 +642,24 @@ public class MinecraftAPI {
          * @param startingSlot where is starts filling the slots with the list of items/itemStacks
          * @param itemStacks the items that are going to be put in the gui and go through the slots.
          */
-        public void setItems(int startingSlot, ArrayList<ItemStack> itemStacks){
+        protected void setItems(int startingSlot,ArrayList<ItemStack> itemStacks,boolean checkItemIsNull){
             Arrays.stream(itemStacks.toArray()).forEach(items ->{
-                for(int i = startingSlot; i <= inventory.getSize(); i++){
-                    if(!isSlotNull(i)){
-                        inventory.setItem(i, (ItemStack) items);
+                for(int i = startingSlot; i < inventory.getSize(); i++){
+                    if(checkItemIsNull) {
+                        if (!isSlotNull(i)) {
+                            inventory.setItem(i, (ItemStack) items);
+                        }
+                    }else{
+                        if (isSlotNull(i)) {
+                            inventory.setItem(i, (ItemStack) items);
+                        }
                     }
                 }
             });
+        }
+
+        protected Size getSize(){
+            return slots;
         }
 
         /**
@@ -681,7 +675,7 @@ public class MinecraftAPI {
          *
          * @return false if the item is null otherwise we return true.
          */
-        public boolean areSlotsNull(int... slots){
+        protected boolean areSlotsNull(int... slots){
             for (PrimitiveIterator.OfInt it = Arrays.stream(slots).iterator(); it.hasNext(); ) {
                 int slot = it.next();
                 if (inventory.getItem(slot) == null || inventory.getItem(slot).getType() == Material.AIR) {
@@ -691,12 +685,24 @@ public class MinecraftAPI {
             }
             return false;
         }
+
+        protected int convertArray(int... slots){
+            int x = 0;
+
+            for(int i : slots)
+                x = i;
+
+
+            return  x;
+        }
+
+
         /**
          * Just checks over an list of integers to see if the item in the inventory is null or not.
          *
          * @return false if the item is null otherwise we return true.
          */
-        public boolean isSlotNull(List<Integer> slots) {
+        protected boolean isSlotNull(List<Integer> slots) {
             for (int i = 0; i < slots.size(); i++) {
                 if (inventory.getItem(i) == null || inventory.getItem(i).getType() == Material.AIR) {
 
@@ -711,28 +717,32 @@ public class MinecraftAPI {
          * @param slot, where the item is going to get placed in the gui.
          * @param stack, The item that is getting inserted into the gui
          */
-        public void addItem(int slot, ItemStack stack){
+        protected void addItem(int slot, ItemStack stack){
             if(isSlotNull(slot)) {
                 inventory.setItem(slot, stack);
             }
         }
-        public void setItem(int slot, ItemStack stack){
+        protected void setItem(int slot, ItemStack stack){
             inventory.setItem(slot, stack);
         }
 
-        public void setItems(int slot, List<ItemStack> stack){
+        protected void setItems(int slot, List<ItemStack> stack){
             for(int i = 0; i < stack.size(); i++) {
                 inventory.setItem(slot, stack.get(i));
             }
         }
-
+        protected void fillSlots(int slot, ItemStack stack){
+            for(int i = slot ; i < inventory.getSize(); i++){
+                setItem(i,stack);
+            }
+        }
 
         /**
          *
          * @param slots, where the item is going to get placed in the gui.
          * @param stack, The item that is getting inserted into the gui
          */
-        public void addItemToSlots(ItemStack stack, int... slots){
+        protected void addItemToSlots(ItemStack stack, int... slots){
             for(PrimitiveIterator.OfInt it = Arrays.stream(slots).iterator(); it.hasNext();){
                 int slot = it.next();
                 inventory.setItem(slot,stack);
@@ -748,7 +758,7 @@ public class MinecraftAPI {
          */
 
 
-        public void ringInventory(GlassType type, Size size){
+        protected void ringInventory(GlassType type, Size size){
             ItemStack stack = type.getGlassType();
             ItemMeta meta = stack.getItemMeta();
             meta.setDisplayName(" ");
@@ -771,6 +781,20 @@ public class MinecraftAPI {
                         }
                     }
                     addItemToSlots(stack,8,18,27,36,17,26,35,45);
+                    break;
+                case FORTY_FIVE:
+
+                    for(int i = 0; i < inventory.getSize(); i++){
+                        if(isSlotNull(i)){
+                            inventory.setItem(i,stack);
+                        }
+                    }
+                    for(int x = 10; x < 35; x++){
+                        if(!isSlotNull(x)){
+                            inventory.setItem(x,new ItemStack(Material.AIR));
+                        }
+                    }
+                    addItemToSlots(stack,18,27,36,17,26,35);
                     break;
                 case TWENTY_SEVEN:
 
