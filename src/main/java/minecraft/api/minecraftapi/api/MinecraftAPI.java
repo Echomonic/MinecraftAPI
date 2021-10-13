@@ -3,6 +3,7 @@ package minecraft.api.minecraftapi.api;
 import com.google.common.reflect.ClassPath;
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
+import lombok.Getter;
 import minecraft.api.minecraftapi.Main;
 import minecraft.api.minecraftapi.utils.Colorize;
 import minecraft.api.minecraftapi.utils.GlassType;
@@ -838,5 +839,37 @@ public class MinecraftAPI {
         }
 
     }
+    public static class StringUtil{
 
+        public static boolean isAlphaNumeric(String b){
+
+            return b.matches("^[a-zA-Z0-9]+$");
+        }
+        public static boolean isAlphaNumericSpaced(String b){
+
+            return b.matches("[a-zA-Z0-9\\s]+$");
+        }
+        public static boolean isAUrl(String b){
+
+            return b.matches(UrlRegex.URL_REGEX.regex);
+        }
+        public static boolean isRegex(String b,UrlRegex regex){
+
+            return b.matches(regex.getRegex());
+        }
+    }
+    public enum UrlRegex{
+
+        ALPHANUMERIC("^[a-zA-Z0-9]+$"),
+        ALPHANUMERIC_SPACE("^[a-zA-Z0-9\\s]+$"),
+        URL_REGEX("(http|ftp|https):\\/\\/([\\w_-]+(?:(?:\\.[\\w_-]+)+))([\\w.,@?^=%&:\\/~+#-]*[\\w@?^=%&\\/~+#-])"),
+        ;
+        @Getter
+        private final String regex;
+
+        UrlRegex(String regex) {
+            this.regex = regex;
+        }
+
+    }
 }
